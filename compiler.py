@@ -8,6 +8,8 @@ MINUS = "MINUS"
 INT = "INT"
 DIVISION = "DIVISION"
 MULTIPLICATION = "MULTIPLICATION"
+OPEN_PARENTHESIS = "OPEN_PARENTHESIS"
+CLOSE_PARENTHESIS = "CLOSE_PARENTHESIS"
 
 #ERRORS
 operatorError = "A non-digit followed a operator"
@@ -15,6 +17,7 @@ operatorAbsenceError = "A non-operator followed a digit"
 digitAbsenceError = "A non-digit character started the command"
 commentNotCloseException = "A comment was started but closing symbol '*/' is missing "
 spaceInBetweenDigitsException = "Does not accept space in between digits without operators"
+parenthesisNotClosedException = "Parenthesis was not closed"
 
 class Token:
     def __init__(self, value, type):
@@ -59,6 +62,16 @@ class Tokenizer:
             self.position += 1
             self.current_token = Token(value, MULTIPLICATION)
             return
+        if self.origin[self.position] == "(":
+            value = "("
+            self.position += 1
+            self.current_token = Token(value, OPEN_PARENTHESIS)
+            return
+        if self.origin[self.position] == ")":
+            value = ")"
+            self.position += 1
+            self.current_token = Token(value, CLOSE_PARENTHESIS)
+            return
         raise Exception(digitAbsenceError)
 
 class PreProcessing:
@@ -91,42 +104,47 @@ class Analyser:
         Analyser.tokens = Tokenizer(origin)
 
     @staticmethod
-    def termTreatment():
-        result = None
+    def factorTreatment():
         Analyser.tokens.selectNextToken()
         if Analyser.tokens.current_token.type == INT:
-            result = Analyser.tokens.current_token.value
-            Analyser.tokens.selectNextToken()
-            while(Analyser.tokens.current_token.type == MULTIPLICATION or Analyser.tokens.current_token.type == DIVISION):
-                if Analyser.tokens.current_token.type == MULTIPLICATION:
-                    Analyser.tokens.selectNextToken()
-                    if Analyser.tokens.current_token.type == INT:
-                        result *= Analyser.tokens.current_token.value
-                    else:
-                        raise Exception(operatorError)
-                elif Analyser.tokens.current_token.type == DIVISION:
-                    Analyser.tokens.selectNextToken()
-                    if Analyser.tokens.current_token.type == INT:
-                        result //= Analyser.tokens.current_token.value
-                    else:
-                        raise Exception(operatorError)
-                else:
-                    raise Exception(operatorAbsenceError)
-                Analyser.tokens.selectNextToken()
+            return Analyser.tokens.current_token.value
+        elif Analyser.tokens.current_token.type == PLUS:
+            return Analyser.factorTreatment()
+        elif Analyser.tokens.current_token.type == MINUS:
+            return -(Analyser.factorTreatment())
+        elif Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            result = Analyser.analyseExpression()
+            if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                Exception(parenthesisNotClosedException)
+            else:
+                return result
         else:
             raise Exception(digitAbsenceError)
+
+    @staticmethod
+    def termTreatment():
+        result = Analyser.factorTreatment()
+        Analyser.tokens.selectNextToken()
+        while(Analyser.tokens.current_token.type == MULTIPLICATION or Analyser.tokens.current_token.type == DIVISION):
+            if Analyser.tokens.current_token.type == MULTIPLICATION:
+                result = Analyser.factorTreatment()
+                result *= Analyser.tokens.current_token.value
+            elif Analyser.tokens.current_token.type == DIVISION:
+                result = Analyser.factorTreatment()
+                result //= Analyser.tokens.current_token.value
+            else:
+                raise Exception(operatorAbsenceError)
+            # Analyser.tokens.selectNextToken()
         return result
 
     @staticmethod     
     def analyseExpression():
         result = Analyser.termTreatment()
-        while(Analyser.tokens.current_token.type != EOF):
+        while(Analyser.tokens.current_token.type == PLUS or Analyser.tokens.current_token.type == MINUS):
             if Analyser.tokens.current_token.type == PLUS:
                     result += Analyser.termTreatment()
             elif Analyser.tokens.current_token.type == MINUS:
                     result -= Analyser.termTreatment()
-            else:
-                raise Exception(operatorAbsenceError)
         return result
 
 command = (str(input("Calculator: ")))
