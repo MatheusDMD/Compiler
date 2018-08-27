@@ -3,8 +3,10 @@ Using python3
 
 ## EBNF
 
-n -> number token
-expression = n, { (“*” | “/”), n}, { (“+” | “-”), n, { (“*” | “/”), n}} ;
+expression = term, { (“+” | “-”), term } ;
+term = factor, { (“*” | “/”), factor } ;
+factor = (“+” | “-”) factor, number, “(” expression “)” ;
+number = “-263” | ... | “263” ;
 
 ## Syntactic diagram
 
