@@ -17,6 +17,17 @@ SEMICOLON = "SEMICOLON"
 IDENTIFIER = "IDENTIFIER"
 PRINTF = "PRINTF"
 COMMANDS = "COMMANDS"
+EQUALS = "EQUALS"
+GREATER_THAN = "GREATER_THAN"
+LESS_THAN = "LESS_THAN"
+AND = "AND"
+OR = "OR"
+NOT = "NOT"
+IF = "IF"
+ELSE = "ELSE"
+WHILE = "WHILE"
+SCANF = "SCANF"
+
 
 #ERRORS
 operatorError = "A non-digit followed a operator"
@@ -25,15 +36,18 @@ digitAbsenceError = "A non-digit character started the command"
 commentNotCloseException = "A comment was started but closing symbol '*/' is missing "
 spaceInBetweenDigitsException = "Does not accept space in between digits without operators"
 parenthesNotOpenExceptionPrint = "Parenthesis was not open after print"
+parenthesNotOpenExceptionIf = "Parenthesis was not open after if"
+parenthesNotOpenExceptionWhile = "Parenthesis was not open after while"
 parenthesisNotClosedException = "Parenthesis was not closed"
 curlyBracesNotClosedException = "Curly Braces was not closed"
 noBlockException = "No block was declared, '{' "
 commandNotClosedException = "Missing semicolon"
 attributionContainsNoIdentifier = "attribution Contains No Identifier"
 commandAbsenceTreatment = "Values not treated by command"
+NotEndOfFileExpection = "Concludes before the end of the file"
 
 #VALUES
-reserved_words = ["printf"]
+reserved_words = {"printf":PRINTF, "if":IF, "while":WHILE, "else":ELSE, "scanf":SCANF}
 
 class Token:
     def __init__(self, value, type):
@@ -48,13 +62,9 @@ class Node:
         pass
 
 class BinOp(Node):
-    def __init__(self,type,left_child):
+    def __init__(self,type,children):
         self.value = type
-        self.children = [left_child]
-
-    def add_right(self,right_node):
-        self.children.append(right_node)
-
+        self.children = children
     def Evaluate(self,SymbolTable):
         if self.value == ATTRIBUTION:
             SymbolTable.set_value(self.children[0].name, self.children[1].Evaluate(SymbolTable))
@@ -69,7 +79,16 @@ class BinOp(Node):
             return left_child * right_child
         elif self.value == DIVISION:
             return left_child // right_child
-        
+        elif self.value == EQUALS:
+            return left_child == right_child
+        elif self.value == GREATER_THAN:
+            return left_child > right_child
+        elif self.value == LESS_THAN:
+            return left_child < right_child
+        elif self.value == AND:
+            return left_child and right_child
+        elif self.value == OR:
+            return left_child or right_child
         
 class UnOp(Node):
     def __init__(self,type,child):
@@ -81,6 +100,8 @@ class UnOp(Node):
             return child
         elif self.value == MINUS:
             return -(child)
+        elif self.value == NOT:
+            return not child
 
 class IntVal(Node):
     def __init__(self,value):
@@ -102,14 +123,37 @@ class Printf(Node):
     def Evaluate(self,SymbolTable):
         print(self.child.Evaluate(SymbolTable))
 
+class Scanf(Node):
+    def __init__(self,type):
+        self.value = type
+    def Evaluate(self,SymbolTable):
+        return int(input())
+
 class Commands(Node):
     def __init__(self,children,type):
         self.value = type
         self.children = children
-
     def Evaluate(self, SymbolTable):
         for child in self.children:
             child.Evaluate(SymbolTable)
+
+class IfCondition(Node):
+    def __init__(self,children,type):
+        self.value = type
+        self.children = children
+    def Evaluate(self, SymbolTable):
+        if self.children[0].Evaluate(SymbolTable):
+            self.children[1].Evaluate(SymbolTable)
+        else: 
+            self.children[2].Evaluate(SymbolTable)
+
+class WhileLoop(Node):
+    def __init__(self,children,type):
+        self.value = type
+        self.children = children
+    def Evaluate(self, SymbolTable):
+        while self.children[0].Evaluate(SymbolTable):
+            self.children[1].Evaluate(SymbolTable)
 
 class NoOp(Node):
     def __init__(self,type):
@@ -154,7 +198,7 @@ class Tokenizer:
                 self.position += 1
         if isWord:
             if value in reserved_words:
-                self.current_token = Token(value, PRINTF)
+                self.current_token = Token(value, reserved_words[value])
             else:    
                 self.current_token = Token(value, IDENTIFIER)
             return
@@ -191,7 +235,11 @@ class Tokenizer:
         if self.origin[self.position] == "=":
             value = "="
             self.position += 1
-            self.current_token = Token(value, ATTRIBUTION)
+            if self.origin[self.position] == "=":
+                self.position += 1
+                self.current_token = Token(value + "=", EQUALS)
+            else:
+                self.current_token = Token(value + "=", ATTRIBUTION)
             return
         if self.origin[self.position] == "{":
             value = "{"
@@ -207,6 +255,39 @@ class Tokenizer:
             value = ";"
             self.position += 1
             self.current_token = Token(value, SEMICOLON)
+            return
+        if self.origin[self.position] == ">":
+            value = ">"
+            self.position += 1
+            self.current_token = Token(value, GREATER_THAN)
+            return
+        if self.origin[self.position] == "<":
+            value = "<"
+            self.position += 1
+            self.current_token = Token(value, LESS_THAN)
+            return
+        if self.origin[self.position] == "!":
+            value = "!"
+            self.position += 1
+            self.current_token = Token(value, NOT)
+            return
+        if self.origin[self.position] == "&":
+            value = "&"
+            self.position += 1
+            if self.origin[self.position] == "&":
+                self.position += 1
+                self.current_token = Token(value + "&", AND)
+            else:
+                Exception(digitAbsenceError)
+            return
+        if self.origin[self.position] == "|":
+            value = "|"
+            self.position += 1
+            if self.origin[self.position] == "|":
+                self.position += 1
+                self.current_token = Token(value + "|", OR)
+            else:
+                Exception(digitAbsenceError)
             return
         raise Exception(digitAbsenceError)
 
@@ -239,93 +320,188 @@ class Analyser:
         Analyser.tokens = Tokenizer(origin)
         Analyser.tokens.selectNextToken()
 
+    #Attribution
     @staticmethod     
     def attributionTreatment(left_child):
         Analyser.tokens.selectNextToken() 
-        
         if Analyser.tokens.current_token.type == ATTRIBUTION:
-            result = BinOp(ATTRIBUTION, left_child)
-            result.add_right(Analyser.expressionTreatment())
+            Analyser.tokens.selectNextToken()
+            #SCANF
+            if Analyser.tokens.current_token.type == SCANF:
+                Analyser.tokens.selectNextToken() 
+                if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                    Analyser.tokens.selectNextToken()
+                    result = BinOp(ATTRIBUTION, [left_child,Scanf(SCANF)])
+                    if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                        Exception(parenthesisNotClosedException)
+                    else:
+                        Analyser.tokens.selectNextToken() 
+                else:
+                    Exception(parenthesNotOpenExceptionPrint)
+            else:
+                result = BinOp(ATTRIBUTION, [left_child,Analyser.expressionTreatment()])
+
         else:
             Exception(attributionContainsNoIdentifier)
         return result
 
+    #Integers
     @staticmethod
     def factorTreatment():
-        Analyser.tokens.selectNextToken()
+        # Analyser.tokens.selectNextToken()
         if Analyser.tokens.current_token.type == INT:
             result = IntVal(Analyser.tokens.current_token.value)
+            Analyser.tokens.selectNextToken()
         elif Analyser.tokens.current_token.type == PLUS or Analyser.tokens.current_token.type == MINUS:
-            result = UnOp(Analyser.tokens.current_token.type, Analyser.factorTreatment())
+            curr_type = Analyser.tokens.current_token.type
+            Analyser.tokens.selectNextToken()
+            result = UnOp(curr_type, Analyser.factorTreatment())
         elif Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            Analyser.tokens.selectNextToken()
             result = Analyser.expressionTreatment()
             if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
                 Exception(parenthesisNotClosedException)                
+            else:
+                Analyser.tokens.selectNextToken()
         elif Analyser.tokens.current_token.type == IDENTIFIER:
-            result = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
+            curr_value = Analyser.tokens.current_token.value
+            Analyser.tokens.selectNextToken()
+            result = Identifier(curr_value, IDENTIFIER)
         else:
             raise Exception(digitAbsenceError)
-        Analyser.tokens.selectNextToken()
         return result
 
     @staticmethod
     def termTreatment():
         result = Analyser.factorTreatment()
         while(Analyser.tokens.current_token.type == MULTIPLICATION or Analyser.tokens.current_token.type == DIVISION):
-            result = BinOp(Analyser.tokens.current_token.type, result)
-            result.add_right(Analyser.factorTreatment())
+            curr_type = Analyser.tokens.current_token.type
+            Analyser.tokens.selectNextToken()
+            result = BinOp(curr_type, [result,Analyser.factorTreatment()])
         return result
 
     @staticmethod     
     def expressionTreatment():
         result = Analyser.termTreatment()
         while(Analyser.tokens.current_token.type == PLUS or Analyser.tokens.current_token.type == MINUS):
-            result = BinOp(Analyser.tokens.current_token.type, result)
-            result.add_right(Analyser.termTreatment())
+            curr_type = Analyser.tokens.current_token.type
+            Analyser.tokens.selectNextToken()
+            result = BinOp(curr_type, [result,Analyser.termTreatment()])
+        return result
+
+    @staticmethod
+    def relationalExpression():
+        left_child  = Analyser.expressionTreatment()
+        BinOp_type = Analyser.tokens.current_token.type
+        Analyser.tokens.selectNextToken()
+        right_child = Analyser.expressionTreatment()
+        return BinOp(BinOp_type, [left_child, right_child])
+
+    #Boolean
+    @staticmethod
+    def booleanFactorTreatment():
+        Analyser.tokens.selectNextToken()
+        if Analyser.tokens.current_token.type == NOT:
+            result = UnOp(Analyser.tokens.current_token.type, Analyser.booleanFactorTreatment())
+        else:
+            result = Analyser.relationalExpression()
+        # Analyser.tokens.selectNextToken()
+        return result
+
+    @staticmethod
+    def booleanTermTreatment():
+        result = Analyser.booleanFactorTreatment()
+        while(Analyser.tokens.current_token.type == AND):
+            result = BinOp(Analyser.tokens.current_token.type, [result,Analyser.booleanFactorTreatment()])
+        return result
+
+    @staticmethod     
+    def booleanExpressionTreatment():
+        result = Analyser.booleanTermTreatment()
+        while(Analyser.tokens.current_token.type == OR):
+            result = BinOp(Analyser.tokens.current_token.type, [result,Analyser.booleanTermTreatment()])
         return result
 
     @staticmethod     
     def commandTreatment():
-        if Analyser.tokens.current_token.type == IDENTIFIER:
+        #COMMANDS
+        if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+            result = Analyser.commandsTreatment()
+        #ATTRIBUTION
+        elif Analyser.tokens.current_token.type == IDENTIFIER:
             left_child = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
             result = Analyser.attributionTreatment(left_child)
+        #PRINTF
         elif Analyser.tokens.current_token.type == PRINTF:
             Analyser.tokens.selectNextToken() 
             if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
                 result = Printf(Analyser.expressionTreatment(),PRINTF)
                 if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
                     Exception(parenthesisNotClosedException)
-                print(Analyser.tokens.current_token.type)
+                else:
+                    Analyser.tokens.selectNextToken() 
             else:
                 Exception(parenthesNotOpenExceptionPrint)
-        elif Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
-            result = Analyser.commandsTreatment()
-        elif Analyser.tokens.current_token.type == CLOSE_CURLY_BRACES:
-            result = Analyser.commandsTreatment()
+        #IF
+        elif Analyser.tokens.current_token.type == IF:
+            Analyser.tokens.selectNextToken()
+            params = []
+            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                result = Analyser.booleanExpressionTreatment()
+                params.append(result)
+                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                    Exception(parenthesisNotClosedException)
+                else:
+                    Analyser.tokens.selectNextToken()
+                    if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+                        true_child = Analyser.commandsTreatment()
+                        params.append(true_child)
+                        if Analyser.tokens.current_token.type == ELSE:
+                            Analyser.tokens.selectNextToken()
+                            false_child = Analyser.commandsTreatment()
+                            params.append(false_child)
+                        result = IfCondition(params, IF)
+                    else:
+                        Exception(parenthesNotOpenExceptionIf)
+            else:
+                Exception(parenthesNotOpenExceptionIf)
+        #WHILE
+        elif Analyser.tokens.current_token.type == WHILE:
+            Analyser.tokens.selectNextToken()
+            params = []
+            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                result = Analyser.booleanExpressionTreatment()
+                params.append(result)
+                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                    Exception(parenthesisNotClosedException)
+                else:
+                    Analyser.tokens.selectNextToken()
+                    if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+                        true_child = Analyser.commandsTreatment()
+                        params.append(true_child)
+                        result = WhileLoop(params, WHILE)
+                    else:
+                        Exception(parenthesNotOpenExceptionWhile)
+            else:
+                Exception(parenthesNotOpenExceptionWhile)
+
         else:
             raise Exception(commandAbsenceTreatment)
-        Analyser.tokens.selectNextToken() 
-        print(Analyser.tokens.current_token.type)
         return result
-
-            
 
     @staticmethod     
     def commandsTreatment():
-        # Analyser.tokens.selectNextToken()
-        print(Analyser.tokens.current_token.type)
         if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
             children = []
             Analyser.tokens.selectNextToken()
             while Analyser.tokens.current_token.type != CLOSE_CURLY_BRACES:
-                print(Analyser.tokens.current_token.type)
                 children.append(Analyser.commandTreatment())
                 if Analyser.tokens.current_token.type == SEMICOLON:
                     Analyser.tokens.selectNextToken() 
-                    print(Analyser.tokens.current_token.type)           
                 else:
                     Exception(commandNotClosedException)
             result = Commands(children, None)
+            Analyser.tokens.selectNextToken()
             return result
         else:
             Exception(noBlockException)
@@ -336,8 +512,8 @@ if __name__ == "__main__":
         program = program.replace('\n',' ')
         program = program.replace(' ',' ')
         processed_command = PreProcessing.process(program)
-        print(processed_command)
         Analyser.init(processed_command)
-        # if(Analyser.tokens.current_token.type != EOF):
+        if(Analyser.tokens.current_token.type != EOF):
+            Exception(NotEndOfFileExpection)
         ST = SymbolTable()
         Analyser.commandsTreatment().Evaluate(ST)
