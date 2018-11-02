@@ -270,9 +270,9 @@ class SymbolTable:
             return self.table[str(identifier)][0]
 
     def get_type(self,identifier):
-        if self.table[str(identifier)] is None:
+        if str(identifier) not in self.table :
             if self.ancestor != None:
-                return self.ancestor.get_value(identifier)
+                return self.ancestor.get_type(identifier)
             else:
                 raise Exception(declaredButNotAssignedException)
         else:

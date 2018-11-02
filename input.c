@@ -1,25 +1,26 @@
-int soma(int x, int y){
-    int mult(int k, int j){
-        return(k * j);
+int soma(int x, int y)
+{
+    int mult(int a)
+    {
+        return(2 * a);
     };
-    return(x + mult(y,2));
+    return(x + mult(y));
 }
-void main(){
+void main()
+{
     int a;
     int b;
-    int c;
-    int d;
+    a = 3;
+    b = soma(a, 4);
+    printf(b);
     {
+        int c;
         int a;
         a = 2;
-        printf(a);
+        c = soma(b, 2); /* Não dá erro */
+        printf(a); /* Imprime 2 */
     };
-    a = 3;
-    printf(a);
-    c = soma(a,4);
-    d = a;
-    printf(c);
-    printf(d);
-    b = soma(a,3);
     printf(b);
+    printf(a); /* Imprime 3 */
+    printf(c); /* Dá erro */
 }
