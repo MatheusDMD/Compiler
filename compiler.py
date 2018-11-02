@@ -32,6 +32,9 @@ TYPE = "TYPE"
 INT_TYPE = "INT_TYPE"
 CHAR_TYPE = "CHAR_TYPE"
 VOID_TYPE = "VOID_TYPE"
+FUNCTION = "FUNCTION"
+COMMA = "COMMA"
+RETURN = "RETURN"
 
 #ERRORS
 operatorError = "A non-digit followed a operator"
@@ -56,10 +59,12 @@ referencedBeforeAssignedException = "Variable referenced before assigned."
 declaredButNotAssignedException = "Variable declared but not assigned"
 doubleDeclarationException = "Variable declared multiple times"
 differentTypesOperationException = "Operation executed between different types"
+missingCommaException = "Missing comma in function declaration"
+numberOfArgumentsDoNotMatch = "Number of arguments in the function declaration doesn't match the number of arguments in the function call"
 
 #VALUES
 type_words = {"int":INT_TYPE, "char":CHAR_TYPE, "void":VOID_TYPE}
-reserved_words = {"printf":PRINTF, "if":IF, "while":WHILE, "else":ELSE, "scanf":SCANF, "main":MAIN, "int":TYPE, "char":TYPE, "void":TYPE}
+reserved_words = {"printf":PRINTF, "if":IF, "while":WHILE, "else":ELSE, "scanf":SCANF, "main":IDENTIFIER, "int":TYPE, "char":TYPE, "void":TYPE, "return": RETURN}
 
 class Token:
     def __init__(self, value, type):
@@ -70,19 +75,19 @@ class Node:
     def __init__(self):
         self.value = None
         self.children = []
-    def Evaluate(self,SymbolTable):
+    def Evaluate(self,ST):
         pass
 
 class BinOp(Node):
     def __init__(self,type,children):
         self.value = type
         self.children = children
-    def Evaluate(self,SymbolTable):
+    def Evaluate(self,ST):
         if self.value == ASSIGNMENT:
-            SymbolTable.set_value(self.children[0].name, self.children[1].Evaluate(SymbolTable))
+            ST.set_value(self.children[0].name, self.children[1].Evaluate(ST))
             return
-        left = self.children[0].Evaluate(SymbolTable)
-        right = self.children[1].Evaluate(SymbolTable)
+        left = self.children[0].Evaluate(ST)
+        right = self.children[1].Evaluate(ST)
         left_child = left[0]
         left_val_type = left[1]
         right_child = right[0]
@@ -113,8 +118,8 @@ class UnOp(Node):
     def __init__(self,type,child):
         self.value = type
         self.children = [child]
-    def Evaluate(self, SymbolTable):
-        child, val_type = self.children[0].Evaluate(SymbolTable)
+    def Evaluate(self, ST):
+        child, val_type = self.children[0].Evaluate(ST)
         if self.value == PLUS:
             return child, val_type
         elif self.value == MINUS:
@@ -125,99 +130,153 @@ class UnOp(Node):
 class IntVal(Node):
     def __init__(self,value):
         self.value = value
-    def Evaluate(self, SymbolTable):
+    def Evaluate(self, ST):
         return self.value, INT_TYPE
 
 class Identifier(Node):
     def __init__(self,name,type):
         self.value = type
         self.name = name
-    def Evaluate(self,SymbolTable):
-        value = SymbolTable.get_value(self.name)
-        type = SymbolTable.get_type(self.name)
+    def Evaluate(self,ST):
+        value = ST.get_value(self.name)
+        type = ST.get_type(self.name)
         return value, type
 
 class Printf(Node):
     def __init__(self,child,type):
         self.value = type
         self.child = child
-    def Evaluate(self,SymbolTable):
-        print(self.child.Evaluate(SymbolTable)[0])
+    def Evaluate(self,ST):
+        print(self.child.Evaluate(ST)[0])
+
+class Return(Node):
+    def __init__(self,child,type):
+        self.value = type
+        self.child = child
+    def Evaluate(self,ST):
+        return self.child.Evaluate(ST)
 
 class Scanf(Node):
     def __init__(self,type):
         self.value = type
-    def Evaluate(self,SymbolTable):
+    def Evaluate(self,ST):
         return int(input()), INT_TYPE
 
 class Declaration(Node):
     def __init__(self,type,child):
         self.value = type
         self.children = [child]
-    def Evaluate(self, SymbolTable):
-        SymbolTable.set_type(self.children[0].name, self.value)
+    def Evaluate(self, ST):
+        ST.set_type(self.children[0].name, self.value)
 
 class Commands(Node):
-    def __init__(self,children,type):
+    def __init__(self,children,type,new_scope = False):
         self.value = type
         self.children = children
-    def Evaluate(self, SymbolTable):
+        self.new_scope = new_scope
+    def Evaluate(self, ST):
+        if self.new_scope:
+            New_ST = SymbolTable(ST)
+        else:
+            New_ST = ST
         for child in self.children:
-            child.Evaluate(SymbolTable)
+            res = child.Evaluate(New_ST)
+            if res is not None:
+                result, type = res
+                if result != None and type != None:
+                    if type == INT_TYPE:
+                        return result, INT_TYPE
+
+class FunctionDeclaration(Node):
+    def __init__(self,identifier,children,commands,type):
+        self.value = type
+        self.children = children
+        self.identifier = identifier
+        self.commands = commands
+    def Evaluate(self, ST): 
+        ST.set_type(self.identifier.name, FUNCTION)
+        ST.set_value(self.identifier.name, (self,FUNCTION))
+
+class FunctionCall(Node):
+    def __init__(self,identifier,func_identifier,children,type):
+        self.value = type
+        self.children = children
+        self.identifier = identifier
+        self.func_identifier = func_identifier
+    def Evaluate(self, ST):
+        New_ST = SymbolTable(ST)
+        functionDeclaration = ST.get_value(self.func_identifier.name)
+        if len(functionDeclaration.children) != len(self.children):
+            Exception(numberOfArgumentsDoNotMatch)
+        else:
+            for child_index in range(len(functionDeclaration.children)):
+                New_ST.set_type(functionDeclaration.children[child_index].children[0].name,functionDeclaration.children[child_index].value)
+                New_ST.set_value(functionDeclaration.children[child_index].children[0].name,self.children[child_index].Evaluate(ST))
+            result = functionDeclaration.commands.Evaluate(New_ST)
+            if self.identifier is not None:
+                ST.set_value(self.identifier.name, result)
+            else:
+                return result
 
 class IfCondition(Node):
     def __init__(self,children,type):
         self.value = type
         self.children = children
-    def Evaluate(self, SymbolTable):
-        if self.children[0].Evaluate(SymbolTable):
-            self.children[1].Evaluate(SymbolTable)
+    def Evaluate(self, ST):
+        if self.children[0].Evaluate(ST):
+            self.children[1].Evaluate(ST)
         else: 
-            self.children[2].Evaluate(SymbolTable)
+            self.children[2].Evaluate(ST)
 
 class WhileLoop(Node):
     def __init__(self,children,type):
         self.value = type
         self.children = children
-    def Evaluate(self, SymbolTable):
-        while self.children[0].Evaluate(SymbolTable):
-            self.children[1].Evaluate(SymbolTable)
+    def Evaluate(self, ST):
+        while self.children[0].Evaluate(ST):
+            self.children[1].Evaluate(ST)
 
 class NoOp(Node):
     def __init__(self,type):
         self.value = type
-    def Evaluate(self,SymbolTable):
+    def Evaluate(self,ST):
         pass
 
 class SymbolTable:
-    table = {}
-    def __init__(self):
-        pass
+    def __init__(self, ancestor=None):
+        self.ancestor = ancestor
+        self.table = {}
     def set_value(self,identifier,value_type):
-        if identifier not in SymbolTable.table:
-            Exception(referencedBeforeAssignedException)
+        if identifier not in self.table:
+            raise Exception(referencedBeforeAssignedException)
         else:
-            if SymbolTable.table[str(identifier)][1] == value_type[1]:
-                SymbolTable.table[str(identifier)][0] = int(value_type[0])
+            if self.table[str(identifier)][1] == value_type[1]:
+                self.table[str(identifier)][0] = value_type[0]
 
     def set_type(self,identifier,type):
-        if identifier not in SymbolTable.table:
-            SymbolTable.table[str(identifier)] = [None, str(type)]
+        if identifier not in self.table:
+            self.table[str(identifier)] = [None, str(type)]
         else:
-            if SymbolTable.table[str(identifier)][1] is not None:
-                Exception(doubleDeclarationException)
+            if self.table[str(identifier)][1] is not None:
+                raise Exception(doubleDeclarationException)
 
     def get_value(self,identifier):
-        if SymbolTable.table[str(identifier)] is None:
-            Exception(declaredButNotAssignedException)
+        if str(identifier) not in self.table :
+            if self.ancestor != None:
+                return self.ancestor.get_value(identifier)
+            else:
+                raise Exception(declaredButNotAssignedException)
         else:
-            return SymbolTable.table[str(identifier)][0]
+            return self.table[str(identifier)][0]
 
     def get_type(self,identifier):
-        if SymbolTable.table[str(identifier)] is None:
-            Exception(declaredButNotAssignedException)
+        if self.table[str(identifier)] is None:
+            if self.ancestor != None:
+                return self.ancestor.get_value(identifier)
+            else:
+                raise Exception(declaredButNotAssignedException)
         else:
-            return SymbolTable.table[str(identifier)][1]
+            return self.table[str(identifier)][1]
 
 class Tokenizer:
     def __init__(self, origin):
@@ -228,14 +287,17 @@ class Tokenizer:
         value = ""
         isDigit = False
         isWord = False
+        local_count = 0
         if self.position >= len(self.origin):
             self.current_token = Token("", EOF)
             return
         while self.position < len(self.origin) and self.origin[self.position] == " ":
             self.position += 1
+            local_count += 1
         while self.position < len(self.origin) and self.origin[self.position].isdigit():
             value += self.origin[self.position]
             self.position += 1
+            local_count += 1
             isDigit = True
         if isDigit:
             self.current_token = Token(int(value), INT)
@@ -243,103 +305,129 @@ class Tokenizer:
         if self.origin[self.position].isalpha():
             value += self.origin[self.position]
             self.position += 1
+            local_count += 1
             isWord = True
             while self.position < len(self.origin) and (self.origin[self.position].isdigit() or self.origin[self.position].isalpha() or self.origin[self.position] == '_'):
                 value += self.origin[self.position]
                 self.position += 1
+                local_count += 1
         if isWord:
             if value in reserved_words:
                 self.current_token = Token(value, reserved_words[value])
             else:    
                 self.current_token = Token(value, IDENTIFIER)
-            return
+            return local_count
         if self.origin[self.position] == "+":
             value = "+"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, PLUS)
-            return
+            return local_count
         if self.origin[self.position] == "-":
             value = "-"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, MINUS)
-            return
+            return local_count
         if self.origin[self.position] == "/":
             value = "/"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, DIVISION)
-            return
+            return local_count
         if self.origin[self.position] == "*":
             value = "*"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, MULTIPLICATION)
-            return
+            return local_count
         if self.origin[self.position] == "(":
             value = "("
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, OPEN_PARENTHESIS)
-            return
+            return local_count
         if self.origin[self.position] == ")":
             value = ")"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, CLOSE_PARENTHESIS)
-            return
+            return local_count
         if self.origin[self.position] == "=":
             value = "="
             self.position += 1
+            local_count += 1
             if self.origin[self.position] == "=":
                 self.position += 1
+                local_count += 1
                 self.current_token = Token(value + "=", EQUALS)
             else:
                 self.current_token = Token(value + "=", ASSIGNMENT)
-            return
+            return local_count
         if self.origin[self.position] == "{":
             value = "{"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, OPEN_CURLY_BRACES)
-            return
+            return local_count
         if self.origin[self.position] == "}":
             value = "}"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, CLOSE_CURLY_BRACES)
-            return
+            return local_count
         if self.origin[self.position] == ";":
             value = ";"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, SEMICOLON)
-            return
+            return local_count
         if self.origin[self.position] == ">":
             value = ">"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, GREATER_THAN)
-            return
+            return local_count
         if self.origin[self.position] == "<":
             value = "<"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, LESS_THAN)
-            return
+            return local_count
         if self.origin[self.position] == "!":
             value = "!"
             self.position += 1
+            local_count += 1
             self.current_token = Token(value, NOT)
-            return
+            return local_count
         if self.origin[self.position] == "&":
             value = "&"
             self.position += 1
+            local_count += 1
             if self.origin[self.position] == "&":
                 self.position += 1
+                local_count += 1
                 self.current_token = Token(value + "&", AND)
             else:
-                Exception(digitAbsenceError)
-            return
+                raise Exception(digitAbsenceError)
+            return local_count
         if self.origin[self.position] == "|":
             value = "|"
             self.position += 1
+            local_count += 1
             if self.origin[self.position] == "|":
                 self.position += 1
+                local_count += 1
                 self.current_token = Token(value + "|", OR)
             else:
-                Exception(digitAbsenceError)
-            return
+                raise Exception(digitAbsenceError)
+            return local_count
+        if self.origin[self.position] == ",":
+            value = ","
+            self.position += 1
+            local_count += 1
+            self.current_token = Token(value, COMMA)
+            return local_count
         raise Exception(digitAbsenceError)
 
 class PreProcessing:
@@ -372,6 +460,55 @@ class Analyser:
         Analyser.tokens = Tokenizer(origin)
         Analyser.tokens.selectNextToken()
         
+    #FUNCTIONCALL-ASSIGNMENT
+    @staticmethod     
+    def functionCallAssignmentTreatment(left_child):
+        func_identifier = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
+        local_step = Analyser.tokens.selectNextToken()
+        if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            children = []                 
+            Analyser.tokens.selectNextToken()
+            while Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                if Analyser.tokens.current_token.type == IDENTIFIER:
+                    children.append(Identifier(Analyser.tokens.current_token.value, IDENTIFIER))
+                elif Analyser.tokens.current_token.type == INT:
+                    children.append(IntVal(Analyser.tokens.current_token.value))
+                Analyser.tokens.selectNextToken()
+                if Analyser.tokens.current_token.type == COMMA:
+                        Analyser.tokens.selectNextToken()
+                elif Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                    pass
+                else:
+                    raise Exception(missingCommaException)
+            result = FunctionCall(left_child, func_identifier,children,FUNCTION)
+            Analyser.tokens.selectNextToken() 
+        else:
+            Analyser.tokens.position -= local_step + len(func_identifier.name)
+            Analyser.tokens.selectNextToken() 
+            result = BinOp(ASSIGNMENT, [left_child,Analyser.expressionTreatment()])    
+        return result
+    
+    #FUNCTIONCALL-EXPRESSION
+    @staticmethod     
+    def functionCallExpressionTreatment(func_identifier):    
+            children = []                 
+            Analyser.tokens.selectNextToken()
+            while Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                if Analyser.tokens.current_token.type == IDENTIFIER:
+                    children.append(Identifier(Analyser.tokens.current_token.value, IDENTIFIER))
+                elif Analyser.tokens.current_token.type == INT:
+                    children.append(IntVal(Analyser.tokens.current_token.value))
+                Analyser.tokens.selectNextToken()
+                if Analyser.tokens.current_token.type == COMMA:
+                        Analyser.tokens.selectNextToken()
+                elif Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                    pass
+                else:
+                    raise Exception(missingCommaException)
+            result = FunctionCall(None, func_identifier, children,FUNCTION)
+            Analyser.tokens.selectNextToken()   
+            return result
+
     #ASSIGNMENT
     @staticmethod     
     def assignmentTreatment(left_child):
@@ -385,21 +522,23 @@ class Analyser:
                     Analyser.tokens.selectNextToken()
                     result = BinOp(ASSIGNMENT, [left_child,Scanf(SCANF)])
                     if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
-                        Exception(parenthesisNotClosedException)
+                        raise Exception(parenthesisNotClosedException)
                     else:
                         Analyser.tokens.selectNextToken() 
                 else:
-                    Exception(parenthesNotOpenExceptionPrint)
+                    raise Exception(parenthesNotOpenExceptionPrint)
+            #FUNCTION-CALL-ASSIGNMENT
+            elif Analyser.tokens.current_token.type == IDENTIFIER:
+                result = Analyser.functionCallAssignmentTreatment(left_child)
             else:
                 result = BinOp(ASSIGNMENT, [left_child,Analyser.expressionTreatment()])
         else:
-            Exception(assignmentContainsNoIdentifier)
+            raise Exception(assignmentContainsNoIdentifier)
         return result
 
     #Integers
     @staticmethod
     def factorTreatment():
-        # Analyser.tokens.selectNextToken()
         if Analyser.tokens.current_token.type == INT:
             result = IntVal(Analyser.tokens.current_token.value)
             Analyser.tokens.selectNextToken()
@@ -411,13 +550,20 @@ class Analyser:
             Analyser.tokens.selectNextToken()
             result = Analyser.expressionTreatment()
             if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
-                Exception(parenthesisNotClosedException)                
+                raise Exception(parenthesisNotClosedException)                
             else:
                 Analyser.tokens.selectNextToken()
         elif Analyser.tokens.current_token.type == IDENTIFIER:
             curr_value = Analyser.tokens.current_token.value
-            Analyser.tokens.selectNextToken()
-            result = Identifier(curr_value, IDENTIFIER)
+            local_step = Analyser.tokens.selectNextToken()
+            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                func_identifier = Identifier(curr_value, IDENTIFIER)
+                result = Analyser.functionCallExpressionTreatment(func_identifier)
+            else:
+                Analyser.tokens.position -= local_step + len(curr_value)
+                Analyser.tokens.selectNextToken()
+                result = Identifier(curr_value, IDENTIFIER)
+                Analyser.tokens.selectNextToken()
         else:
             raise Exception(digitAbsenceError)
         return result
@@ -474,21 +620,63 @@ class Analyser:
         return result
 
     @staticmethod     
+    def variableDeclaration():
+        type = type_words[Analyser.tokens.current_token.value]
+        Analyser.tokens.selectNextToken()
+        if Analyser.tokens.current_token.type == IDENTIFIER:
+            identifier_value = Analyser.tokens.current_token.value
+            Analyser.tokens.selectNextToken()
+            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                Analyser.tokens.selectNextToken()
+                identifier = Identifier(identifier_value, FUNCTION)
+                function_declaration_children = []
+                while(Analyser.tokens.current_token.type != CLOSE_PARENTHESIS):
+                    function_declaration_children.append(Analyser.variableDeclaration())
+                    if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                        break
+                    if Analyser.tokens.current_token.type == COMMA:
+                        Analyser.tokens.selectNextToken()
+                    else:
+                        raise Exception(missingCommaException)
+                if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                    Analyser.tokens.selectNextToken()
+                    result = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),type)
+                else:
+                    raise Exception(parenthesisNotClosedException)
+            else:
+                identifier = Identifier(identifier_value, IDENTIFIER)
+                result = Declaration(type, identifier)
+            return result
+
+    @staticmethod     
     def commandTreatment():
         #COMMANDS
         if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
-            result = Analyser.commandsTreatment()
+            result = Analyser.commandsTreatment(True)
         #PRINTF
         elif Analyser.tokens.current_token.type == PRINTF:
             Analyser.tokens.selectNextToken() 
             if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                Analyser.tokens.selectNextToken() 
                 result = Printf(Analyser.expressionTreatment(),PRINTF)
                 if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
-                    Exception(parenthesisNotClosedException)
+                    raise Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken() 
             else:
-                Exception(parenthesNotOpenExceptionPrint)
+                raise Exception(parenthesNotOpenExceptionPrint)
+        #RETURN
+        elif Analyser.tokens.current_token.type == RETURN:
+            Analyser.tokens.selectNextToken() 
+            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                Analyser.tokens.selectNextToken() 
+                result = Return(Analyser.expressionTreatment(),RETURN)
+                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                    raise Exception(parenthesisNotClosedException)
+                else:
+                    Analyser.tokens.selectNextToken() 
+            else:
+                raise Exception(parenthesNotOpenExceptionPrint)
         #IF
         elif Analyser.tokens.current_token.type == IF:
             Analyser.tokens.selectNextToken()
@@ -497,7 +685,7 @@ class Analyser:
                 result = Analyser.booleanExpressionTreatment()
                 params.append(result)
                 if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
-                    Exception(parenthesisNotClosedException)
+                    raise Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
@@ -509,9 +697,9 @@ class Analyser:
                             params.append(false_child)
                         result = IfCondition(params, IF)
                     else:
-                        Exception(parenthesNotOpenExceptionIf)
+                        raise Exception(parenthesNotOpenExceptionIf)
             else:
-                Exception(parenthesNotOpenExceptionIf)
+                raise Exception(parenthesNotOpenExceptionIf)
         #WHILE
         elif Analyser.tokens.current_token.type == WHILE:
             Analyser.tokens.selectNextToken()
@@ -520,7 +708,7 @@ class Analyser:
                 result = Analyser.booleanExpressionTreatment()
                 params.append(result)
                 if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
-                    Exception(parenthesisNotClosedException)
+                    raise Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
@@ -528,17 +716,12 @@ class Analyser:
                         params.append(true_child)
                         result = WhileLoop(params, WHILE)
                     else:
-                        Exception(parenthesNotOpenExceptionWhile)
+                        raise Exception(parenthesNotOpenExceptionWhile)
             else:
-                Exception(parenthesNotOpenExceptionWhile)
+                raise Exception(parenthesNotOpenExceptionWhile)
         #DECLARATION
         elif Analyser.tokens.current_token.type == TYPE:
-            type = type_words[Analyser.tokens.current_token.value]
-            Analyser.tokens.selectNextToken()
-            if Analyser.tokens.current_token.type == IDENTIFIER:
-                identifier = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
-                result = Declaration(type, identifier)
-                Analyser.tokens.selectNextToken()
+            result =  Analyser.variableDeclaration()
         #ASSIGNMENT
         elif Analyser.tokens.current_token.type == IDENTIFIER:
             left_child = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
@@ -548,7 +731,7 @@ class Analyser:
         return result
 
     @staticmethod     
-    def commandsTreatment():
+    def commandsTreatment(new_scope = False):
         if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
             children = []
             Analyser.tokens.selectNextToken()
@@ -557,33 +740,50 @@ class Analyser:
                 if Analyser.tokens.current_token.type == SEMICOLON:
                     Analyser.tokens.selectNextToken() 
                 else:
-                    Exception(commandNotClosedException)
-            result = Commands(children, None)
+                    raise Exception(commandNotClosedException)
+            result = Commands(children, None, new_scope)
             Analyser.tokens.selectNextToken()
             return result
         else:
-            Exception(noBlockException)
+            raise Exception(noBlockException)
 
     @staticmethod     
     def programTreatment():
-        if Analyser.tokens.current_token.type == TYPE:
-            type = type_words[Analyser.tokens.current_token.value]
-            Analyser.tokens.selectNextToken() 
-            if Analyser.tokens.current_token.type == MAIN:
+        commands_children = []
+        while(Analyser.tokens.current_token.type != EOF):
+            function_declaration_children = []
+            if Analyser.tokens.current_token.type == TYPE:
+                type = type_words[Analyser.tokens.current_token.value]
                 Analyser.tokens.selectNextToken() 
-                if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                if Analyser.tokens.current_token.type == IDENTIFIER:
+                    identifier = Identifier(Analyser.tokens.current_token.value, FUNCTION)
                     Analyser.tokens.selectNextToken() 
-                    if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                    if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
                         Analyser.tokens.selectNextToken()
-                        return Analyser.commandsTreatment()
+                        while(Analyser.tokens.current_token.type != CLOSE_PARENTHESIS):
+                            function_declaration_children.append(Analyser.variableDeclaration())
+                            if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                                break
+                            if Analyser.tokens.current_token.type == COMMA:
+                                Analyser.tokens.selectNextToken()
+                            else:
+                                raise Exception(missingCommaException)
+                        if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                            Analyser.tokens.selectNextToken()
+                            function = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),type)
+                            if identifier.name == "main":
+                                main = FunctionCall(None,identifier,function_declaration_children,type)
+                        else:
+                            raise Exception(parenthesisNotClosedException)
                     else:
-                        Exception(parenthesisNotClosedException)
+                        raise Exception(parenthesNotOpenExceptionFunction)     
                 else:
-                    Exception(parenthesNotOpenExceptionFunction)     
+                    raise Exception(notMainException)
             else:
-                Exception(notMainException)
-        else:
-            Exception(notTypeException)
+                raise Exception(notTypeException)
+            commands_children.append(function)
+        commands_children.append(main)
+        return Commands(commands_children, None)
 
 
 if __name__ == "__main__":
@@ -593,7 +793,8 @@ if __name__ == "__main__":
         program = program.replace(' ',' ')
         processed_command = PreProcessing.process(program)
         Analyser.init(processed_command)
-        if(Analyser.tokens.current_token.type != EOF):
-            Exception(NotEndOfFileExpection)
         ST = SymbolTable()
-        Analyser.programTreatment().Evaluate(ST)
+        p = Analyser.programTreatment()
+        if(Analyser.tokens.current_token.type != EOF):
+            raise Exception(NotEndOfFileExpection)
+        p.Evaluate(ST)
