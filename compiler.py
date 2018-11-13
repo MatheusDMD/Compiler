@@ -292,7 +292,7 @@ class Commands(Node):
                 result = []
                 for line in res:
                     result.append(line)
-                return result
+        return result
 
 class IfCondition(Node):
     def __init__(self,children,var_type):
@@ -300,10 +300,20 @@ class IfCondition(Node):
         self.value = var_type
         self.children = children
     def Evaluate(self, SymbolTable):
-        if self.children[0].Evaluate(SymbolTable):
-            self.children[1].Evaluate(SymbolTable)
-        else: 
-            self.children[2].Evaluate(SymbolTable)
+        # if self.children[0].Evaluate(SymbolTable):
+        #     self.children[1].Evaluate(SymbolTable)
+        # else: 
+        #     self.children[2].Evaluate(SymbolTable)
+        res = ["IF_{0}".format(self.id)]
+        res += self.children[0].Evaluate(SymbolTable)
+        res.append("CMP EBX, False")
+        res.append("JE ELSE_{0}".format(self.id))
+        res += self.children[1].Evaluate(SymbolTable, False)
+        res.append("JMP EXIT_{0}".format(self.id))
+        res = ["ELSE_{0}".format(self.id)]
+        res += self.children[2].Evaluate(SymbolTable, False)
+        res.append("EXIT_{0}".format(self.id))
+        return res
 
 class WhileLoop(Node):
     def __init__(self,children,var_type):

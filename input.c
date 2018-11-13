@@ -3,7 +3,9 @@ void main(){
     int y;
     x = 5;
     y = 0;
-    while(x > y){
-        printf(x + y);
+    if(x > y){
+        printf(x);
+    }else{
+        printf(y);
     }
 }
