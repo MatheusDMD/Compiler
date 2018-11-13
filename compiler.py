@@ -274,19 +274,25 @@ class Declaration(Node):
         return result
         
 class Commands(Node):
-    def __init__(self,children,var_type):
+    def __init__(self,children,var_type, is_main):
         self.id = Assembly.get_ID()
         self.value = var_type
         self.children = children
+        self.is_main = is_main
     def Evaluate(self, SymbolTable):
+        result = []
         for child in self.children:
             res = child.Evaluate(SymbolTable)
-            if type(child) is Declaration:
-                for line in res:
-                    Assembly.variable_declaration.append(line)  
-            else:  
-                for line in res:
-                    Assembly.assembly_commands.append(line)
+            for line in res:
+                result.append(line)  
+            if self.is_main:
+                if type(child) is Declaration:
+                    Assembly.variable_declaration += result
+                else:
+                    Assembly.assembly_commands += result
+            else:
+                return result
+
 
 class IfCondition(Node):
     def __init__(self,children,var_type):
@@ -609,7 +615,7 @@ class Analyser:
     def commandTreatment():
         #COMMANDS
         if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-            result = Analyser.commandsTreatment()
+            result = Analyser.commandsTreatment(False)
         #PRINTF
         elif Analyser.tokens.current_token.var_type == PRINTF:
             Analyser.tokens.selectNextToken() 
@@ -633,11 +639,11 @@ class Analyser:
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-                        true_child = Analyser.commandsTreatment()
+                        true_child = Analyser.commandsTreatment(False)
                         params.append(true_child)
                         if Analyser.tokens.current_token.var_type == ELSE:
                             Analyser.tokens.selectNextToken()
-                            false_child = Analyser.commandsTreatment()
+                            false_child = Analyser.commandsTreatment(False)
                             params.append(false_child)
                         result = IfCondition(params, IF)
                     else:
@@ -656,7 +662,7 @@ class Analyser:
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-                        true_child = Analyser.commandsTreatment()
+                        true_child = Analyser.commandsTreatment(False)
                         params.append(true_child)
                         result = WhileLoop(params, WHILE)
                     else:
@@ -680,7 +686,7 @@ class Analyser:
         return result
 
     @staticmethod     
-    def commandsTreatment():
+    def commandsTreatment(main):
         if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
             children = []
             Analyser.tokens.selectNextToken()
@@ -690,7 +696,7 @@ class Analyser:
                     Analyser.tokens.selectNextToken() 
                 else:
                     Exception(commandNotClosedException)
-            result = Commands(children, None)
+            result = Commands(children, None, main)
             Analyser.tokens.selectNextToken()
             return result
         else:
@@ -707,7 +713,7 @@ class Analyser:
                     Analyser.tokens.selectNextToken() 
                     if Analyser.tokens.current_token.var_type == CLOSE_PARENTHESIS:
                         Analyser.tokens.selectNextToken()
-                        return Analyser.commandsTreatment()
+                        return Analyser.commandsTreatment(True) #TODO ADD MAIN == FALSE FOR WHILE LOOPS
                     else:
                         Exception(parenthesisNotClosedException)
                 else:
