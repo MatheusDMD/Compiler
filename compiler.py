@@ -61,57 +61,162 @@ differentTypesOperationException = "Operation executed between different types"
 type_words = {"int":INT_TYPE, "char":CHAR_TYPE, "void":VOID_TYPE}
 reserved_words = {"printf":PRINTF, "if":IF, "while":WHILE, "else":ELSE, "scanf":SCANF, "main":MAIN, "int":TYPE, "char":TYPE, "void":TYPE}
 
+#ASSEMBLY
+init_assembly = [
+"; constants",
+"SYS_EXIT equ 1",
+"SYS_READ equ 3",
+"SYS_WRITE equ 4",
+"STDIN equ 0",
+"STDOUT equ 1",
+"True equ 1",
+"False equ 0",
+"segment .data",
+"segment .bss ; variables"
+]
+default_function_declarations_assembly = [
+"res RESB 1",
+"section .text",
+"global _start",
+"print :  ; print",
+"POP EBX",
+"POP EAX",
+"PUSH EBX",
+"XOR ESI, ESI",
+"print_dec :",
+"MOV EDX, 0",
+"MOV EBX, 0x000A",
+"DIV EBX",
+"ADD EDX, '0'",
+"PUSH EDX",
+"INC ESI",
+"CMP EAX, 0",
+"JZ print_next",
+"JMP print_dec",
+"print_next :",
+"CMP ESI, 0",
+"JZ print_exit",
+"DEC ESI",
+"MOV EAX, SYS_WRITE",
+"MOV EBX, STDOUT",
+"POP ECX",
+"MOV [res], ECX",
+"MOV ECX, res",
+"MOV EDX, 1",
+"INT 0x80",
+"JMP print_next",
+"print_exit :",
+"RET",
+"; subrotinas if/while",
+"binop_je :",
+"JE binop_true",
+"JMP binop_false",
+"binop_jg :",
+"JG binop_true",
+"JMP binop_false",
+"binop_jl :",
+"JL binop_true",
+"JMP binop_false",
+"binop_false :",
+"MOV EBX, False",
+"JMP binop_exit",
+"binop_true :",
+"MOV EBX, True",
+"binop_exit : RET",
+"_start :"
+]
+end = [
+"; end interrupt",
+"MOV EAX, 1",
+"INT 0x80"
+]
+
+class Assembly:
+    id = 0
+    assembly_commands = []
+    variable_declaration = []
+
+    @staticmethod
+    def get_ID():
+        res = Assembly.id
+        Assembly.id += 1
+        return res
+
+    @staticmethod
+    def write():
+        with open("program.asm", "w") as fw:
+            for write_list in [init_assembly, Assembly.variable_declaration, default_function_declarations_assembly, Assembly.assembly_commands, end]:
+                for line in write_list:
+                    fw.write(line + '\n')
+            
+            # fw.write(line + '\n' for line in init_assembly) 
+            # fw.write(line + '\n' for line in Assembly.variable_declaration) #VARIABLE DECLARATIONS
+            # fw.write(line + '\n' for line in default_function_declarations_assembly)
+            # fw.write(line + '\n' for line in Assembly.assembly_commands) #COMMANDS
+            # fw.write(line + '\n' for line in end)
+
 class Token:
-    def __init__(self, value, type):
+    def __init__(self, value, var_type):
         self.value = value
-        self.type = type
+        self.var_type = var_type
 
 class Node:
     def __init__(self):
+        self.id = Assembly.get_ID()
         self.value = None
         self.children = []
     def Evaluate(self,SymbolTable):
         pass
 
 class BinOp(Node):
-    def __init__(self,type,children):
-        self.value = type
+    def __init__(self,var_type,children):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = children
     def Evaluate(self,SymbolTable):
         if self.value == ASSIGNMENT:
-            SymbolTable.set_value(self.children[0].name, self.children[1].Evaluate(SymbolTable))
-            return
-        left = self.children[0].Evaluate(SymbolTable)
-        right = self.children[1].Evaluate(SymbolTable)
-        left_child = left[0]
-        left_val_type = left[1]
-        right_child = right[0]
-        right_val_type = right[1]
-        if left_val_type == right_val_type:
-            if self.value == PLUS:
-                return left_child + right_child, left_val_type
-            elif self.value == MINUS:
-                return left_child - right_child, left_val_type
-            elif self.value == MULTIPLICATION:
-                return left_child * right_child, left_val_type
-            elif self.value == DIVISION:
-                return left_child // right_child, left_val_type
-            elif self.value == EQUALS:
-                return left_child == right_child, left_val_type
-            elif self.value == GREATER_THAN:
-                return left_child > right_child, left_val_type
-            elif self.value == LESS_THAN:
-                return left_child < right_child, left_val_type
-            elif self.value == AND:
-                return left_child and right_child, left_val_type
-            elif self.value == OR:
-                return left_child or right_child, left_val_type
+            res = self.children[1].Evaluate(SymbolTable)
+            assignment = "MOV [{0}_1], EBX".format(self.children[0].name)
+            res.append(assignment)
         else:
-            Exception(differentTypesOperationException)
+            res = self.children[0].Evaluate(SymbolTable)
+            res.append("PUSH EBX")
+            right = self.children[1].Evaluate(SymbolTable)
+            res += right
+            res.append("POP EAX")
+            if self.value == PLUS:
+                res.append("ADD EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == MINUS:
+                res.append("SUB EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == MULTIPLICATION:
+                res.append("IMUL EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == DIVISION:
+                res.append("IDIV EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == AND:
+                res.append("AND EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == OR:
+                res.append("OR EAX, EBX")
+                res.append("MOV EBX, EAX")
+            elif self.value == EQUALS:
+                res.append("CMP EAX, EBX")
+                res.append("CALL binop_je")
+            elif self.value == GREATER_THAN:
+                res.append("CMP EAX, EBX")
+                res.append("CALL binop_jg")
+            elif self.value == LESS_THAN:
+                res.append("CMP EAX, EBX")
+                res.append("CALL binop_jl")
+        return res
 
 class UnOp(Node):
-    def __init__(self,type,child):
-        self.value = type
+    def __init__(self,var_type,child):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = [child]
     def Evaluate(self, SymbolTable):
         child, val_type = self.children[0].Evaluate(SymbolTable)
@@ -124,50 +229,69 @@ class UnOp(Node):
 
 class IntVal(Node):
     def __init__(self,value):
+        self.id = Assembly.get_ID()
         self.value = value
     def Evaluate(self, SymbolTable):
-        return self.value, INT_TYPE
+        result = "MOV EBX, {0}".format(self.value)
+        return [result]
 
 class Identifier(Node):
-    def __init__(self,name,type):
-        self.value = type
+    def __init__(self,name,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.name = name
     def Evaluate(self,SymbolTable):
-        value = SymbolTable.get_value(self.name)
-        type = SymbolTable.get_type(self.name)
-        return value, type
+        # value = SymbolTable.get_value(self.name)
+        result = "MOV EBX, [{0}_1]".format(self.name)
+        # var_type = SymbolTable.get_type(self.name)
+        return [result]
 
 class Printf(Node):
-    def __init__(self,child,type):
-        self.value = type
+    def __init__(self,child,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.child = child
     def Evaluate(self,SymbolTable):
-        print(self.child.Evaluate(SymbolTable)[0])
+        res = self.child.Evaluate(SymbolTable)
+        res.append("PUSH EBX")
+        res.append("CALL print")
+        return res
 
 class Scanf(Node):
-    def __init__(self,type):
-        self.value = type
+    def __init__(self,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
     def Evaluate(self,SymbolTable):
         return int(input()), INT_TYPE
 
 class Declaration(Node):
-    def __init__(self,type,child):
-        self.value = type
+    def __init__(self,var_type,child):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = [child]
     def Evaluate(self, SymbolTable):
-        SymbolTable.set_type(self.children[0].name, self.value)
-
+        result = ["{0}_1 RESD 1".format(self.children[0].name)]
+        return result
+        
 class Commands(Node):
-    def __init__(self,children,type):
-        self.value = type
+    def __init__(self,children,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = children
     def Evaluate(self, SymbolTable):
         for child in self.children:
-            child.Evaluate(SymbolTable)
+            res = child.Evaluate(SymbolTable)
+            if type(child) is Declaration:
+                for line in res:
+                    Assembly.variable_declaration.append(line)  
+            else:  
+                for line in res:
+                    Assembly.assembly_commands.append(line)
 
 class IfCondition(Node):
-    def __init__(self,children,type):
-        self.value = type
+    def __init__(self,children,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = children
     def Evaluate(self, SymbolTable):
         if self.children[0].Evaluate(SymbolTable):
@@ -176,16 +300,24 @@ class IfCondition(Node):
             self.children[2].Evaluate(SymbolTable)
 
 class WhileLoop(Node):
-    def __init__(self,children,type):
-        self.value = type
+    def __init__(self,children,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
         self.children = children
     def Evaluate(self, SymbolTable):
-        while self.children[0].Evaluate(SymbolTable):
-            self.children[1].Evaluate(SymbolTable)
+        res = ["LOOP_{0}".format(self.id)]
+        res += self.children[0].Evaluate(SymbolTable)
+        res.append("CMP EBX, False")
+        res.append("JE EXIT_{0}".format(self.id))
+        res += self.children[1].Evaluate(SymbolTable)
+        res.append("JMP LOOP_{0}".format(self.id))
+        res.append("EXIT_{0}".format(self.id))
+        return res
 
 class NoOp(Node):
-    def __init__(self,type):
-        self.value = type
+    def __init__(self,var_type):
+        self.id = Assembly.get_ID()
+        self.value = var_type
     def Evaluate(self,SymbolTable):
         pass
 
@@ -200,9 +332,9 @@ class SymbolTable:
             if SymbolTable.table[str(identifier)][1] == value_type[1]:
                 SymbolTable.table[str(identifier)][0] = int(value_type[0])
 
-    def set_type(self,identifier,type):
+    def set_type(self,identifier,var_type):
         if identifier not in SymbolTable.table:
-            SymbolTable.table[str(identifier)] = [None, str(type)]
+            SymbolTable.table[str(identifier)] = [None, str(var_type)]
         else:
             if SymbolTable.table[str(identifier)][1] is not None:
                 Exception(doubleDeclarationException)
@@ -376,15 +508,15 @@ class Analyser:
     @staticmethod     
     def assignmentTreatment(left_child):
         Analyser.tokens.selectNextToken() 
-        if Analyser.tokens.current_token.type == ASSIGNMENT:
+        if Analyser.tokens.current_token.var_type == ASSIGNMENT:
             Analyser.tokens.selectNextToken()
             #SCANF
-            if Analyser.tokens.current_token.type == SCANF:
+            if Analyser.tokens.current_token.var_type == SCANF:
                 Analyser.tokens.selectNextToken() 
-                if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                if Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
                     Analyser.tokens.selectNextToken()
                     result = BinOp(ASSIGNMENT, [left_child,Scanf(SCANF)])
-                    if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                    if Analyser.tokens.current_token.var_type != CLOSE_PARENTHESIS:
                         Exception(parenthesisNotClosedException)
                     else:
                         Analyser.tokens.selectNextToken() 
@@ -400,21 +532,21 @@ class Analyser:
     @staticmethod
     def factorTreatment():
         # Analyser.tokens.selectNextToken()
-        if Analyser.tokens.current_token.type == INT:
+        if Analyser.tokens.current_token.var_type == INT:
             result = IntVal(Analyser.tokens.current_token.value)
             Analyser.tokens.selectNextToken()
-        elif Analyser.tokens.current_token.type == PLUS or Analyser.tokens.current_token.type == MINUS:
-            curr_type = Analyser.tokens.current_token.type
+        elif Analyser.tokens.current_token.var_type == PLUS or Analyser.tokens.current_token.var_type == MINUS:
+            curr_type = Analyser.tokens.current_token.var_type
             Analyser.tokens.selectNextToken()
             result = UnOp(curr_type, Analyser.factorTreatment())
-        elif Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+        elif Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
             Analyser.tokens.selectNextToken()
             result = Analyser.expressionTreatment()
-            if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+            if Analyser.tokens.current_token.var_type != CLOSE_PARENTHESIS:
                 Exception(parenthesisNotClosedException)                
             else:
                 Analyser.tokens.selectNextToken()
-        elif Analyser.tokens.current_token.type == IDENTIFIER:
+        elif Analyser.tokens.current_token.var_type == IDENTIFIER:
             curr_value = Analyser.tokens.current_token.value
             Analyser.tokens.selectNextToken()
             result = Identifier(curr_value, IDENTIFIER)
@@ -425,8 +557,8 @@ class Analyser:
     @staticmethod
     def termTreatment():
         result = Analyser.factorTreatment()
-        while(Analyser.tokens.current_token.type == MULTIPLICATION or Analyser.tokens.current_token.type == DIVISION):
-            curr_type = Analyser.tokens.current_token.type
+        while(Analyser.tokens.current_token.var_type == MULTIPLICATION or Analyser.tokens.current_token.var_type == DIVISION):
+            curr_type = Analyser.tokens.current_token.var_type
             Analyser.tokens.selectNextToken()
             result = BinOp(curr_type, [result,Analyser.factorTreatment()])
         return result
@@ -434,8 +566,8 @@ class Analyser:
     @staticmethod     
     def expressionTreatment():
         result = Analyser.termTreatment()
-        while(Analyser.tokens.current_token.type == PLUS or Analyser.tokens.current_token.type == MINUS):
-            curr_type = Analyser.tokens.current_token.type
+        while(Analyser.tokens.current_token.var_type == PLUS or Analyser.tokens.current_token.var_type == MINUS):
+            curr_type = Analyser.tokens.current_token.var_type
             Analyser.tokens.selectNextToken()
             result = BinOp(curr_type, [result,Analyser.termTreatment()])
         return result
@@ -443,7 +575,7 @@ class Analyser:
     @staticmethod
     def relationalExpression():
         left_child  = Analyser.expressionTreatment()
-        BinOp_type = Analyser.tokens.current_token.type
+        BinOp_type = Analyser.tokens.current_token.var_type
         Analyser.tokens.selectNextToken()
         right_child = Analyser.expressionTreatment()
         return BinOp(BinOp_type, [left_child, right_child])
@@ -452,8 +584,8 @@ class Analyser:
     @staticmethod
     def booleanFactorTreatment():
         Analyser.tokens.selectNextToken()
-        if Analyser.tokens.current_token.type == NOT:
-            result = UnOp(Analyser.tokens.current_token.type, Analyser.booleanFactorTreatment())
+        if Analyser.tokens.current_token.var_type == NOT:
+            result = UnOp(Analyser.tokens.current_token.var_type, Analyser.booleanFactorTreatment())
         else:
             result = Analyser.relationalExpression()
         # Analyser.tokens.selectNextToken()
@@ -462,48 +594,48 @@ class Analyser:
     @staticmethod
     def booleanTermTreatment():
         result = Analyser.booleanFactorTreatment()
-        while(Analyser.tokens.current_token.type == AND):
-            result = BinOp(Analyser.tokens.current_token.type, [result,Analyser.booleanFactorTreatment()])
+        while(Analyser.tokens.current_token.var_type == AND):
+            result = BinOp(Analyser.tokens.current_token.var_type, [result,Analyser.booleanFactorTreatment()])
         return result
 
     @staticmethod     
     def booleanExpressionTreatment():
         result = Analyser.booleanTermTreatment()
-        while(Analyser.tokens.current_token.type == OR):
-            result = BinOp(Analyser.tokens.current_token.type, [result,Analyser.booleanTermTreatment()])
+        while(Analyser.tokens.current_token.var_type == OR):
+            result = BinOp(Analyser.tokens.current_token.var_type, [result,Analyser.booleanTermTreatment()])
         return result
 
     @staticmethod     
     def commandTreatment():
         #COMMANDS
-        if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+        if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
             result = Analyser.commandsTreatment()
         #PRINTF
-        elif Analyser.tokens.current_token.type == PRINTF:
+        elif Analyser.tokens.current_token.var_type == PRINTF:
             Analyser.tokens.selectNextToken() 
-            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            if Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
                 result = Printf(Analyser.expressionTreatment(),PRINTF)
-                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                if Analyser.tokens.current_token.var_type != CLOSE_PARENTHESIS:
                     Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken() 
             else:
                 Exception(parenthesNotOpenExceptionPrint)
         #IF
-        elif Analyser.tokens.current_token.type == IF:
+        elif Analyser.tokens.current_token.var_type == IF:
             Analyser.tokens.selectNextToken()
             params = []
-            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            if Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
                 result = Analyser.booleanExpressionTreatment()
                 params.append(result)
-                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                if Analyser.tokens.current_token.var_type != CLOSE_PARENTHESIS:
                     Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken()
-                    if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+                    if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
                         true_child = Analyser.commandsTreatment()
                         params.append(true_child)
-                        if Analyser.tokens.current_token.type == ELSE:
+                        if Analyser.tokens.current_token.var_type == ELSE:
                             Analyser.tokens.selectNextToken()
                             false_child = Analyser.commandsTreatment()
                             params.append(false_child)
@@ -513,17 +645,17 @@ class Analyser:
             else:
                 Exception(parenthesNotOpenExceptionIf)
         #WHILE
-        elif Analyser.tokens.current_token.type == WHILE:
+        elif Analyser.tokens.current_token.var_type == WHILE:
             Analyser.tokens.selectNextToken()
             params = []
-            if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+            if Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
                 result = Analyser.booleanExpressionTreatment()
                 params.append(result)
-                if Analyser.tokens.current_token.type != CLOSE_PARENTHESIS:
+                if Analyser.tokens.current_token.var_type != CLOSE_PARENTHESIS:
                     Exception(parenthesisNotClosedException)
                 else:
                     Analyser.tokens.selectNextToken()
-                    if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+                    if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
                         true_child = Analyser.commandsTreatment()
                         params.append(true_child)
                         result = WhileLoop(params, WHILE)
@@ -532,15 +664,15 @@ class Analyser:
             else:
                 Exception(parenthesNotOpenExceptionWhile)
         #DECLARATION
-        elif Analyser.tokens.current_token.type == TYPE:
-            type = type_words[Analyser.tokens.current_token.value]
+        elif Analyser.tokens.current_token.var_type == TYPE:
+            var_type = type_words[Analyser.tokens.current_token.value]
             Analyser.tokens.selectNextToken()
-            if Analyser.tokens.current_token.type == IDENTIFIER:
+            if Analyser.tokens.current_token.var_type == IDENTIFIER:
                 identifier = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
-                result = Declaration(type, identifier)
+                result = Declaration(var_type, identifier)
                 Analyser.tokens.selectNextToken()
         #ASSIGNMENT
-        elif Analyser.tokens.current_token.type == IDENTIFIER:
+        elif Analyser.tokens.current_token.var_type == IDENTIFIER:
             left_child = Identifier(Analyser.tokens.current_token.value, IDENTIFIER)
             result = Analyser.assignmentTreatment(left_child)
         else:
@@ -549,12 +681,12 @@ class Analyser:
 
     @staticmethod     
     def commandsTreatment():
-        if Analyser.tokens.current_token.type == OPEN_CURLY_BRACES:
+        if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
             children = []
             Analyser.tokens.selectNextToken()
-            while Analyser.tokens.current_token.type != CLOSE_CURLY_BRACES:
+            while Analyser.tokens.current_token.var_type != CLOSE_CURLY_BRACES:
                 children.append(Analyser.commandTreatment())
-                if Analyser.tokens.current_token.type == SEMICOLON:
+                if Analyser.tokens.current_token.var_type == SEMICOLON:
                     Analyser.tokens.selectNextToken() 
                 else:
                     Exception(commandNotClosedException)
@@ -566,14 +698,14 @@ class Analyser:
 
     @staticmethod     
     def programTreatment():
-        if Analyser.tokens.current_token.type == TYPE:
-            type = type_words[Analyser.tokens.current_token.value]
+        if Analyser.tokens.current_token.var_type == TYPE:
+            var_type = type_words[Analyser.tokens.current_token.value]
             Analyser.tokens.selectNextToken() 
-            if Analyser.tokens.current_token.type == MAIN:
+            if Analyser.tokens.current_token.var_type == MAIN:
                 Analyser.tokens.selectNextToken() 
-                if Analyser.tokens.current_token.type == OPEN_PARENTHESIS:
+                if Analyser.tokens.current_token.var_type == OPEN_PARENTHESIS:
                     Analyser.tokens.selectNextToken() 
-                    if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
+                    if Analyser.tokens.current_token.var_type == CLOSE_PARENTHESIS:
                         Analyser.tokens.selectNextToken()
                         return Analyser.commandsTreatment()
                     else:
@@ -593,7 +725,8 @@ if __name__ == "__main__":
         program = program.replace(' ',' ')
         processed_command = PreProcessing.process(program)
         Analyser.init(processed_command)
-        if(Analyser.tokens.current_token.type != EOF):
+        if(Analyser.tokens.current_token.var_type != EOF):
             Exception(NotEndOfFileExpection)
         ST = SymbolTable()
         Analyser.programTreatment().Evaluate(ST)
+        Assembly.write()
