@@ -4,6 +4,7 @@ void main(){
     x = 5;
     y = 0;
     while(x > y){
-        printf(x + y);
+        printf(y);
+        y = y + 1;
     }
 }
