@@ -279,6 +279,7 @@ class Commands(Node):
         self.value = var_type
         self.children = children
     def Evaluate(self, SymbolTable, main = True):
+        result = []
         for child in self.children:
             res = child.Evaluate(SymbolTable)
             if main:
@@ -289,7 +290,6 @@ class Commands(Node):
                     for line in res:
                         Assembly.assembly_commands.append(line)
             else:
-                result = []
                 for line in res:
                     result.append(line)
         return result
