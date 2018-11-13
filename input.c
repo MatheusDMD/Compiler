@@ -1,6 +1,9 @@
 void main(){
     int x;
-    int y
-    y = 1;
-    printf(x + y);
+    int y;
+    x = 5;
+    y = 0;
+    while(x > y){
+        printf(x + y);
+    }
 }
