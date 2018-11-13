@@ -274,25 +274,25 @@ class Declaration(Node):
         return result
         
 class Commands(Node):
-    def __init__(self,children,var_type, is_main):
+    def __init__(self,children,var_type):
         self.id = Assembly.get_ID()
         self.value = var_type
         self.children = children
-        self.is_main = is_main
-    def Evaluate(self, SymbolTable):
-        result = []
+    def Evaluate(self, SymbolTable, main = True):
         for child in self.children:
             res = child.Evaluate(SymbolTable)
-            for line in res:
-                result.append(line)  
-            if self.is_main:
+            if main:
                 if type(child) is Declaration:
-                    Assembly.variable_declaration += result
-                else:
-                    Assembly.assembly_commands += result
+                    for line in res:
+                        Assembly.variable_declaration.append(line)  
+                else:  
+                    for line in res:
+                        Assembly.assembly_commands.append(line)
             else:
+                result = []
+                for line in res:
+                    result.append(line)
                 return result
-
 
 class IfCondition(Node):
     def __init__(self,children,var_type):
@@ -315,7 +315,7 @@ class WhileLoop(Node):
         res += self.children[0].Evaluate(SymbolTable)
         res.append("CMP EBX, False")
         res.append("JE EXIT_{0}".format(self.id))
-        res += self.children[1].Evaluate(SymbolTable)
+        res += self.children[1].Evaluate(SymbolTable, False)
         res.append("JMP LOOP_{0}".format(self.id))
         res.append("EXIT_{0}".format(self.id))
         return res
@@ -615,7 +615,7 @@ class Analyser:
     def commandTreatment():
         #COMMANDS
         if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-            result = Analyser.commandsTreatment(False)
+            result = Analyser.commandsTreatment()
         #PRINTF
         elif Analyser.tokens.current_token.var_type == PRINTF:
             Analyser.tokens.selectNextToken() 
@@ -639,11 +639,11 @@ class Analyser:
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-                        true_child = Analyser.commandsTreatment(False)
+                        true_child = Analyser.commandsTreatment()
                         params.append(true_child)
                         if Analyser.tokens.current_token.var_type == ELSE:
                             Analyser.tokens.selectNextToken()
-                            false_child = Analyser.commandsTreatment(False)
+                            false_child = Analyser.commandsTreatment()
                             params.append(false_child)
                         result = IfCondition(params, IF)
                     else:
@@ -662,7 +662,7 @@ class Analyser:
                 else:
                     Analyser.tokens.selectNextToken()
                     if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
-                        true_child = Analyser.commandsTreatment(False)
+                        true_child = Analyser.commandsTreatment()
                         params.append(true_child)
                         result = WhileLoop(params, WHILE)
                     else:
@@ -686,7 +686,7 @@ class Analyser:
         return result
 
     @staticmethod     
-    def commandsTreatment(main):
+    def commandsTreatment():
         if Analyser.tokens.current_token.var_type == OPEN_CURLY_BRACES:
             children = []
             Analyser.tokens.selectNextToken()
@@ -696,7 +696,7 @@ class Analyser:
                     Analyser.tokens.selectNextToken() 
                 else:
                     Exception(commandNotClosedException)
-            result = Commands(children, None, main)
+            result = Commands(children, None)
             Analyser.tokens.selectNextToken()
             return result
         else:
@@ -713,7 +713,7 @@ class Analyser:
                     Analyser.tokens.selectNextToken() 
                     if Analyser.tokens.current_token.var_type == CLOSE_PARENTHESIS:
                         Analyser.tokens.selectNextToken()
-                        return Analyser.commandsTreatment(True) #TODO ADD MAIN == FALSE FOR WHILE LOOPS
+                        return Analyser.commandsTreatment()
                     else:
                         Exception(parenthesisNotClosedException)
                 else:
