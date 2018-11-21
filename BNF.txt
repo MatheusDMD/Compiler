@@ -1,15 +1,21 @@
+program = type, identifier, "(" ((type, identifier), ',')+ ")", commands ;
 commands = “{”, command, “;”, { command, “;” }, “}” ;
-command = assignment | commands | printf | if | while | declaration;
-assignment = identifier, “=”, expression | scanf;
+command = assignment | commands | printf | if | while | declaration ;
+assignment = identifier, “=”, expression | scanf | function_call ;
+function_call = identifier, "(" ,((expression) ",")+, ")" ;
 scanf = "scanf", “(”,“)” ;
 printf = "printf", “(”, expression, “)” ;
-if = "if", “(”, expression, “)”, commands ;
-while = "while",“(”, expression, “)”, commands ;
-declaration = type, identifier ;
-type = "int" | "char"
+if = "if", “(”, bool_expression, “)”, commands ;
+while = "while",“(”, bool_expression, “)”, commands ;
+declaration = type, identifier, { "(" ((type, identifier), ',')+ ")", commands };
+return = "return", "(", { ((expression), ",")+ },")"; 
+type = "int" | "char" | "void" ;
 expression = term, { (“+” | “-”), term } ;
 term = factor, { (“*” | “/”), factor } ;
 factor = (“+” | “-”), factor | num | “(”, expression, “)” | identifier ;
+bool_expression = bool_term, { "||", bool_term } ;
+bool_term = bool_factor, { “&&”, bool_factor } ;
+bool_factor = { expression, (">" | "<" | "==" ), expression } | bool_factor ;
 identifier = letter, { letter | digit | “_” } ;
 num = digit, { digit } ;
 letter = ( a | ... | z | A | ... | Z ) ;
