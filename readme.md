@@ -48,36 +48,36 @@ letter = ( a | ... | z | A | ... | Z ) ;
 digit = ( 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 ) ;
 ## Syntactic diagram
 ### Program
-![program](DS/DS1.png)
+![program](DS/DS1.png =250x)
 ### Commands
-![DS](DS/DS2.png)
+![DS](DS/DS2.png =250x)
 ### Type
-![DS](DS/DS3.png)
+![DS](DS/DS3.png =250x)
 ### Command
-![DS](DS/DS4.png)
+![DS](DS/DS4.png =250x)
 ### if
-![DS](DS/DS5.png)
+![DS](DS/DS5.png =250x)
 ### while
-![DS](DS/DS6.png)
+![DS](DS/DS6.png =250x)
 ### return
-![DS](DS/DS7.png)
+![DS](DS/DS7.png =250x)
 ### Declaration
-![DS](DS/DS8.png)
+![DS](DS/DS8.png =250x)
 ### Attribution
-![DS](DS/DS9.png)
+![DS](DS/DS9.png =250x)
 ### Printf
-![DS](DS/DS10.png)
+![DS](DS/DS10.png =250x)
 ### Expression
-![DS](DS/DS11.png)
+![DS](DS/DS11.png =250x)
 ### Term
-![DS](DS/DS12.png)
+![DS](DS/DS12.png =250x)
 ### Factor
-![DS](DS/DS13.png)
+![DS](DS/DS13.png =250x)
 ### Bool_Expression
-![DS](DS/DS14.png)
+![DS](DS/DS14.png =250x)
 ### Bool_Term
-![DS](DS/DS15.png)
+![DS](DS/DS15.png =250x)
 ### Bool_Factor
-![DS](DS/DS16.png)
+![DS](DS/DS16.png =250x)
 ### Func_Call
-![DS](DS/DS17.png)
+![DS](DS/DS17.png =250x)

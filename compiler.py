@@ -67,9 +67,9 @@ type_words = {"int":INT_TYPE, "char":CHAR_TYPE, "void":VOID_TYPE}
 reserved_words = {"printf":PRINTF, "if":IF, "while":WHILE, "else":ELSE, "scanf":SCANF, "main":IDENTIFIER, "int":TYPE, "char":TYPE, "void":TYPE, "return": RETURN}
 
 class Token:
-    def __init__(self, value, type):
+    def __init__(self, value, var_type):
         self.value = value
-        self.type = type
+        self.type = var_type
 
 class Node:
     def __init__(self):
@@ -79,8 +79,8 @@ class Node:
         pass
 
 class BinOp(Node):
-    def __init__(self,type,children):
-        self.value = type
+    def __init__(self,var_type,children):
+        self.value = var_type
         self.children = children
     def Evaluate(self,ST):
         if self.value == ASSIGNMENT:
@@ -102,21 +102,21 @@ class BinOp(Node):
             elif self.value == DIVISION:
                 return left_child // right_child, left_val_type
             elif self.value == EQUALS:
-                return left_child == right_child, left_val_type
+                return left_child == right_child, CHAR_TYPE
             elif self.value == GREATER_THAN:
-                return left_child > right_child, left_val_type
+                return left_child > right_child, CHAR_TYPE
             elif self.value == LESS_THAN:
-                return left_child < right_child, left_val_type
+                return left_child < right_child, CHAR_TYPE
             elif self.value == AND:
-                return left_child and right_child, left_val_type
+                return left_child and right_child, CHAR_TYPE
             elif self.value == OR:
-                return left_child or right_child, left_val_type
+                return left_child or right_child, CHAR_TYPE
         else:
             Exception(differentTypesOperationException)
 
 class UnOp(Node):
-    def __init__(self,type,child):
-        self.value = type
+    def __init__(self,var_type,child):
+        self.value = var_type
         self.children = [child]
     def Evaluate(self, ST):
         child, val_type = self.children[0].Evaluate(ST)
@@ -134,44 +134,44 @@ class IntVal(Node):
         return self.value, INT_TYPE
 
 class Identifier(Node):
-    def __init__(self,name,type):
-        self.value = type
+    def __init__(self,name,var_type):
+        self.value = var_type
         self.name = name
     def Evaluate(self,ST):
         value = ST.get_value(self.name)
-        type = ST.get_type(self.name)
-        return value, type
+        var_type = ST.get_type(self.name)
+        return value, var_type
 
 class Printf(Node):
-    def __init__(self,child,type):
-        self.value = type
+    def __init__(self,child,var_type):
+        self.value = var_type
         self.child = child
     def Evaluate(self,ST):
         print(self.child.Evaluate(ST)[0])
 
 class Return(Node):
-    def __init__(self,child,type):
-        self.value = type
+    def __init__(self,child,var_type):
+        self.value = var_type
         self.child = child
     def Evaluate(self,ST):
         return self.child.Evaluate(ST)
 
 class Scanf(Node):
-    def __init__(self,type):
-        self.value = type
+    def __init__(self,var_type):
+        self.value = var_type
     def Evaluate(self,ST):
         return int(input()), INT_TYPE
 
 class Declaration(Node):
-    def __init__(self,type,child):
-        self.value = type
+    def __init__(self,var_type,child):
+        self.value = var_type
         self.children = [child]
     def Evaluate(self, ST):
         ST.set_type(self.children[0].name, self.value)
 
 class Commands(Node):
-    def __init__(self,children,type,new_scope = False):
-        self.value = type
+    def __init__(self,children,var_type,new_scope = False):
+        self.value = var_type
         self.children = children
         self.new_scope = new_scope
     def Evaluate(self, ST):
@@ -182,14 +182,14 @@ class Commands(Node):
         for child in self.children:
             res = child.Evaluate(New_ST)
             if res is not None:
-                result, type = res
-                if result != None and type != None:
-                    if type == INT_TYPE:
+                result, var_type = res
+                if result != None and var_type != None:
+                    if var_type == INT_TYPE:
                         return result, INT_TYPE
 
 class FunctionDeclaration(Node):
-    def __init__(self,identifier,children,commands,type):
-        self.value = type
+    def __init__(self,identifier,children,commands,var_type):
+        self.value = var_type
         self.children = children
         self.identifier = identifier
         self.commands = commands
@@ -198,8 +198,8 @@ class FunctionDeclaration(Node):
         ST.set_value(self.identifier.name, (self,FUNCTION))
 
 class FunctionCall(Node):
-    def __init__(self,identifier,func_identifier,children,type):
-        self.value = type
+    def __init__(self,identifier,func_identifier,children,var_type):
+        self.value = var_type
         self.children = children
         self.identifier = identifier
         self.func_identifier = func_identifier
@@ -219,26 +219,26 @@ class FunctionCall(Node):
                 return result
 
 class IfCondition(Node):
-    def __init__(self,children,type):
-        self.value = type
+    def __init__(self,children,var_type):
+        self.value = var_type
         self.children = children
     def Evaluate(self, ST):
-        if self.children[0].Evaluate(ST):
+        if self.children[0].Evaluate(ST)[0]:
             self.children[1].Evaluate(ST)
         else: 
             self.children[2].Evaluate(ST)
 
 class WhileLoop(Node):
-    def __init__(self,children,type):
-        self.value = type
+    def __init__(self,children,var_type):
+        self.value = var_type
         self.children = children
     def Evaluate(self, ST):
-        while self.children[0].Evaluate(ST):
+        while self.children[0].Evaluate(ST)[0]:
             self.children[1].Evaluate(ST)
 
 class NoOp(Node):
-    def __init__(self,type):
-        self.value = type
+    def __init__(self,var_type):
+        self.value = var_type
     def Evaluate(self,ST):
         pass
 
@@ -253,9 +253,9 @@ class SymbolTable:
             if self.table[str(identifier)][1] == value_type[1]:
                 self.table[str(identifier)][0] = value_type[0]
 
-    def set_type(self,identifier,type):
+    def set_type(self,identifier,var_type):
         if identifier not in self.table:
-            self.table[str(identifier)] = [None, str(type)]
+            self.table[str(identifier)] = [None, str(var_type)]
         else:
             if self.table[str(identifier)][1] is not None:
                 raise Exception(doubleDeclarationException)
@@ -621,7 +621,7 @@ class Analyser:
 
     @staticmethod     
     def variableDeclaration():
-        type = type_words[Analyser.tokens.current_token.value]
+        var_type = type_words[Analyser.tokens.current_token.value]
         Analyser.tokens.selectNextToken()
         if Analyser.tokens.current_token.type == IDENTIFIER:
             identifier_value = Analyser.tokens.current_token.value
@@ -640,12 +640,12 @@ class Analyser:
                         raise Exception(missingCommaException)
                 if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
                     Analyser.tokens.selectNextToken()
-                    result = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),type)
+                    result = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),var_type)
                 else:
                     raise Exception(parenthesisNotClosedException)
             else:
                 identifier = Identifier(identifier_value, IDENTIFIER)
-                result = Declaration(type, identifier)
+                result = Declaration(var_type, identifier)
             return result
 
     @staticmethod     
@@ -753,7 +753,7 @@ class Analyser:
         while(Analyser.tokens.current_token.type != EOF):
             function_declaration_children = []
             if Analyser.tokens.current_token.type == TYPE:
-                type = type_words[Analyser.tokens.current_token.value]
+                var_type = type_words[Analyser.tokens.current_token.value]
                 Analyser.tokens.selectNextToken() 
                 if Analyser.tokens.current_token.type == IDENTIFIER:
                     identifier = Identifier(Analyser.tokens.current_token.value, FUNCTION)
@@ -770,9 +770,9 @@ class Analyser:
                                 raise Exception(missingCommaException)
                         if Analyser.tokens.current_token.type == CLOSE_PARENTHESIS:
                             Analyser.tokens.selectNextToken()
-                            function = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),type)
+                            function = FunctionDeclaration(identifier,function_declaration_children,Analyser.commandsTreatment(),var_type)
                             if identifier.name == "main":
-                                main = FunctionCall(None,identifier,function_declaration_children,type)
+                                main = FunctionCall(None,identifier,function_declaration_children,var_type)
                         else:
                             raise Exception(parenthesisNotClosedException)
                     else:
